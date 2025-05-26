@@ -81,9 +81,10 @@ const User = () => {
   ];
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    navigate("/login", { replace: true });
+    if (window.confirm("Do you want to log out?")) {
+      localStorage.removeItem("token");
+      navigate("/", { replace: true });
+    }
   };
 
   const toggleDropdown = (name) =>
