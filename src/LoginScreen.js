@@ -23,26 +23,23 @@ const LoginScreen = () => {
   const handleAdminLogin = async () => {
     setIsLoading(true);
     setError("");
-
     try {
-      const { data, error: authError } = await supabase.rpc(
-        "verificar_credenciales",
-        {
-          p_usuario: numeroEmpleado,
-          p_password: claveAcceso,
-        }
-      );
-
+      const { data, error: authError } = await supabase.rpc("verificar_credenciales", {
+        p_usuario: numeroEmpleado,
+        p_password: claveAcceso,
+      });
       if (authError) throw authError;
-
       if (data && data.length > 0) {
-        localStorage.setItem("token", data[0].token);
+        const user = data[0];
+        localStorage.setItem("token", user.token);
+        localStorage.setItem("userRole", "admin");
+        localStorage.setItem("userId", String(user.id_analista));
         navigate("/dashboard");
       } else {
-        throw new Error("Invalid credentials");
+        throw new Error("Credenciales inválidas");
       }
-    } catch (error) {
-      setError(error.message || "Error al iniciar sesión");
+    } catch (e) {
+      setError(e.message);
     } finally {
       setIsLoading(false);
     }
@@ -67,9 +64,10 @@ const LoginScreen = () => {
 
       if (Array.isArray(data) && data.length > 0) {
         localStorage.setItem("token", data[0].token);
+        localStorage.setItem("userRole", "student"); // Aquí guardamos el rol
         navigate("/dashboard");
       } else {
-        throw new Error("Invalid credentials");
+        throw new Error("Credenciales inválidas");
       }
     } catch (error) {
       setError(error.message || "Error al iniciar sesión");

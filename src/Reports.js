@@ -16,7 +16,6 @@ import logoTecNM from "./assets/Logo_TecNM_Horizontal_Blanco.png";
 import menu from "./assets/menu.png";
 import user from "./assets/ic_user.png";
 import { createClient } from "@supabase/supabase-js";
-import jsPDF from "jspdf";
 
 Chart.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -41,34 +40,42 @@ const Reports = () => {
 
   // New state for reports
   const [reports, setReports] = useState([]);
+  const [notification, setNotification] = useState(null);
+
   useEffect(() => {
     const loadReports = async () => {
       const { data, error } = await supabase
-        .from('reportes')
-        .select('nombre, fecha_creacion, datos')
-        .order('fecha_creacion', { ascending: false });
-      if (error) console.error('Error loading reports:', error);
-      else setReports(data.map(r => ({
-        name: r.nombre,
-        date: new Date(r.fecha_creacion),
-        data: r.datos
-      })));
+        .from("reportes")
+        .select("nombre, fecha_creacion, datos")
+        .order("fecha_creacion", { ascending: false });
+      if (error) console.error("Error loading reports:", error);
+      else
+        setReports(
+          data.map((r) => ({
+            name: r.nombre,
+            date: new Date(r.fecha_creacion),
+            data: r.datos,
+          }))
+        );
     };
     loadReports();
   }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) navigate("/login");
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
   const fetchData = async () => {
     try {
-      const { data: prestamosData, error: prestamosError } = await supabase
-        .from("prestamos")
-        .select("*")
-        .gte("fecha_prestamo", startOfMonth(currentDate).toISOString())
-        .lte("fecha_prestamo", endOfMonth(currentDate).toISOString());
+      const { data: prestamosData, error: prestamosError } =
+        await supabase
+          .from("prestamos")
+          .select("*")
+          .gte("fecha_prestamo", startOfMonth(currentDate).toISOString())
+          .lte("fecha_prestamo", endOfMonth(currentDate).toISOString());
 
       if (prestamosError) throw prestamosError;
       setPrestamos(prestamosData);
@@ -79,10 +86,13 @@ const Reports = () => {
       );
       if (cursoData) setPrestamosCurso(cursoData);
 
-      const { data: mesData } = await supabase.rpc("get_total_prestamos_mes", {
-        month: currentDate.getMonth() + 1,
-        year: currentDate.getFullYear(),
-      });
+      const { data: mesData } = await supabase.rpc(
+        "get_total_prestamos_mes",
+        {
+          month: currentDate.getMonth() + 1,
+          year: currentDate.getFullYear(),
+        }
+      );
       if (mesData) setPrestamosMes(mesData);
 
       const { data: atrasadosData } = await supabase.rpc(
@@ -125,11 +135,11 @@ const Reports = () => {
     { name: "Dashboard", subItems: null },
     {
       name: "Library",
-      subItems: ["Books", "Generate Reports", "Loans", "Arrears"],
+      subItems: ["Books", "Generate Reports", "Loans"],
     },
-    { name: "Personal", subItems: ["Teachers", "Students"] },
+    { name: "Personal", subItems: ["Students"] },
     { name: "Entry Register", subItems: null },
-    { name: "Settings", subItems: ["Dark Mode", "User"] },
+    { name: "Settings", subItems: ["User"] },
     { name: "Log Out", subItems: null },
   ];
 
@@ -159,6 +169,9 @@ const Reports = () => {
       case "Entry Register":
         navigate("/entrance");
         break;
+        case "User":
+          navigate("/user");
+          break;
       case "Log Out":
         handleLogout();
         break;
@@ -182,9 +195,9 @@ const Reports = () => {
   };
 
   // Function to generate report
+  // Generate a new report
   const handleGenerateReport = async () => {
     try {
-      // 1) Obtener datos del reporte
       const { data, error } = await supabase.rpc("get_report_data");
       if (error) throw error;
       const reportData = data[0];
@@ -192,46 +205,178 @@ const Reports = () => {
         locale: es,
       })}`;
 
-      // 2) Persistir en la base de datos
       const { error: insertError } = await supabase.rpc("insert_reporte", {
         _nombre: reportName,
         _datos: reportData,
-        _id_analista: null, // Aquí podrías pasar el ID del analista desde el almacenamiento o contexto
+        _id_analista: null,
       });
       if (insertError) throw insertError;
 
-      // 3) Actualizar lista en UI
-      setReports((prev) => [
-        ...prev,
-        { name: reportName, date: new Date(), data: reportData },
-      ]);
+      const newReport = { name: reportName, date: new Date(), data: reportData };
+      // Prepend to keep most recent first
+      setReports((prev) => [newReport, ...prev]);
+
+      // show notification
+      setNotification("Report generated");
+      setTimeout(() => setNotification(null), 3000);
     } catch (err) {
       alert(err.message);
     }
   };
-
   // Function to download as PDF
-  const handleDownload = (report) => {
-    const doc = new jsPDF();
-    doc.text(report.name, 10, 10);
-    doc.text(`Fecha: ${format(report.date, "Pp", { locale: es })}`, 10, 20);
+  const handleDownload = async (report) => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
     const d = report.data;
-    doc.text(`Uso de equipo: ${d.uso_equipo_count}`, 10, 30);
-    doc.text(`Préstamos libros: ${d.prestamos_libros_count}`, 10, 40);
-    doc.text(`Alumnos mes: ${d.alumnos_mes_actual_count}`, 10, 50);
-    doc.text(`Total libros: ${d.total_libros}`, 10, 60);
-    doc.text(
-      `% alumnos ingresados: ${d.porcentaje_alumnos_ingresados}%`,
-      10,
-      70
-    );
-    doc.save(`${report.name}.pdf`);
+
+    // Base64 o ruta de la imagen banner (usa import o base64 aquí)
+    const bannerBase64 = "data:image/jpeg;base64, ...";
+
+    // Carga de imagen si necesario
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = src;
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+      });
+    }
+
+    try {
+      // Banner superior
+      doc.addImage(bannerBase64, "JPEG", 450, 20, 120, 120);
+
+      const pageHeight =
+        doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+
+      // Barra inferior
+      doc.setFillColor(128, 32, 62);
+      doc.rect(40, pageHeight - 60, 520, 30, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(255, 255, 255);
+      doc.text("2025 Año de La Mujer Indígena", 50, pageHeight - 40);
+
+      // Márgenes y cursor inicial
+      const marginLeft = 40;
+      let cursorY = 160;
+
+      // Fecha y asunto
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        `Tijuana, Baja California, ${format(
+          report.date,
+          "dd 'de' MMMM 'de' yyyy",
+          { locale: es }
+        )}`,
+        marginLeft,
+        cursorY
+      );
+      cursorY += 30;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Asunto: Validación de cifras", marginLeft, cursorY);
+      cursorY += 30;
+
+      // Saludo e introducción
+      const introText =
+        "Sirva la presente para enviarle un cordial saludo y para validar las cifras correspondientes al mes " +
+        format(report.date, "MMMM yyyy", { locale: es }) +
+        ", reportadas por el centro de información.";
+      const splitIntro = doc.splitTextToSize(introText, 500);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      doc.text(splitIntro, marginLeft, cursorY);
+      cursorY += splitIntro.length * 18 + 20;
+
+      // Datos del reporte (título)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Datos del reporte:", marginLeft, cursorY);
+      cursorY += 25;
+
+      // Datos en dos columnas, ahora con género
+      const campos = [
+        ["Uso de equipo", d.uso_equipo_count],
+        ["Préstamos libros", d.prestamos_libros_count],
+        ["Alumnos mes", d.alumnos_mes_actual_count],
+        ["Total libros", d.total_libros],
+        ["% alumnos ingresados", `${d.porcentaje_alumnos_ingresados}%`],
+        ["Alumnos Hombres", d.hombres_count],
+        ["Alumnas Mujeres", d.mujeres_count],
+      ];
+
+      const col1X = marginLeft + 20;
+      const col2X = marginLeft + 220;
+      const lineHeight = 20;
+
+      for (let i = 0; i < campos.length; i += 2) {
+        const [label1, value1] = campos[i];
+        doc.setFont("helvetica", "bold");
+        doc.text(`${label1}:`, col1X, cursorY);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(value1), col1X + 150, cursorY);
+
+        if (campos[i + 1]) {
+          const [label2, value2] = campos[i + 1];
+          doc.setFont("helvetica", "bold");
+          doc.text(`${label2}:`, col2X, cursorY);
+          doc.setFont("helvetica", "normal");
+          doc.text(String(value2), col2X + 150, cursorY);
+        }
+        cursorY += lineHeight;
+      }
+
+      cursorY += 30;
+
+      // Cierre formal
+      const closingText =
+        "Sin más por el momento, quedo de usted para cualquier duda o aclaración.";
+      const splitClosing = doc.splitTextToSize(closingText, 500);
+      doc.text(splitClosing, marginLeft, cursorY);
+      cursorY += splitClosing.length * 18 + 40;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("A T E N T A M E N T E", marginLeft, cursorY);
+      cursorY += 30;
+
+      doc.setFont("helvetica", "normal");
+      doc.text("Excelencia en Educación Tecnológica", marginLeft, cursorY);
+      cursorY += 20;
+      doc.text(
+        "Por una Juventud Integrada al Desarrollo de México®",
+        marginLeft,
+        cursorY
+      );
+      cursorY += 20;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("CONSUELO FABIOLA FRAUSTO TRUJILLO", marginLeft, cursorY);
+      cursorY += 25;
+
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        "JEFA DE DEPARTAMENTO DE CENTRO DE INFORMACIÓN",
+        marginLeft,
+        cursorY
+      );
+
+      doc.save(`${report.name}.pdf`);
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      alert("Error generando reporte PDF. Intenta recargar la página.");
+    }
   };
 
   if (loading) return <div style={styles.container}>Cargando...</div>;
 
   return (
     <div style={styles.app}>
+      
       <header style={styles.header}>
         <div style={styles.leftHeader}>
           <button
@@ -274,11 +419,8 @@ const Reports = () => {
               <div
                 style={styles.menuMain}
                 onClick={() => {
-                  if (item.subItems) {
-                    toggleDropdown(item.name);
-                  } else {
-                    handleMenuClick(item.name);
-                  }
+                  if (item.subItems) toggleDropdown(item.name);
+                  else handleMenuClick(item.name);
                 }}
               >
                 {item.name}
@@ -322,9 +464,13 @@ const Reports = () => {
         </div>
       </nav>
 
-      {/* Nuevo contenido agregado */}
-      <div style={styles.content}>
-        
+      <div
+        style={{
+          ...styles.content,
+          marginLeft: isMenuVisible ? "25%" : "5%",
+          transition: "margin-left 0.3s ease",
+        }}
+      >
         {/* Generate Report Button */}
         <div
           style={{
@@ -333,8 +479,11 @@ const Reports = () => {
             justifyContent: "center",
           }}
         >
-          <button onClick={handleGenerateReport} style={styles.actionButton}>
-          Generate Report
+          <button
+            onClick={handleGenerateReport}
+            style={styles.actionButton}
+          >
+            Generate Report
           </button>
         </div>
 
@@ -343,7 +492,7 @@ const Reports = () => {
           {reports.map((rep, idx) => (
             <div key={idx} style={styles.reportItem}>
               <span>
-                {rep.name} -{" "}
+                {rep.name} –{" "}
                 {format(rep.date, "dd/MM/yyyy HH:mm", { locale: es })}
               </span>
               <button
@@ -351,17 +500,21 @@ const Reports = () => {
                 style={styles.smallButton}
               >
                 Download
-
               </button>
             </div>
           ))}
         </div>
       </div>
+      {/* Notification box */}
+      {notification && (
+        <div style={styles.notification}>
+          {notification}
+        </div>
+      )}
     </div>
   );
 };
 
-// Estilos originales + nuevos estilos
 const styles = {
   app: { display: "flex", minHeight: "100vh", backgroundColor: "#f0f2f5" },
   header: {
@@ -460,7 +613,6 @@ const styles = {
     minHeight: "110vh",
     backgroundColor: "#f0f2f5",
   },
-  
   actionButton: {
     backgroundColor: "#1B396A",
     color: "#fff",
@@ -469,21 +621,35 @@ const styles = {
     padding: "0.6rem 1.2rem",
     paddingTop: "1rem",
     cursor: "pointer",
-    fontSize: "20px"
+    fontSize: "20px",
   },
   reportsList: { marginTop: "2rem", width: "100%", margin: "0 auto" },
   reportItem: {
     display: "flex",
-    justifyContent: "flex-start",  // en lugar de space-between
+    justifyContent: "flex-start",
     alignItems: "center",
-    gap: "25rem",                   // espacio entre texto y botón
+    gap: "25rem",
     padding: "1rem 5rem",
     backgroundColor: "#fff",
     borderRadius: "4px",
     boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
     marginBottom: "0.5rem",
   },
-
+  notification: {
+    position: "fixed",
+    bottom: 20,
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "#1B396A",
+    color: "#fff",
+    padding: "1.5rem 2rem",
+    fontSize: "1.2rem",
+    borderRadius: "8px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+    zIndex: 200,
+    maxWidth: "80%",
+    textAlign: "center",
+  },
   smallButton: {
     backgroundColor: "#1B396A",
     color: "#fff",

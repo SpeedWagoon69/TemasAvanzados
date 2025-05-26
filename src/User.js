@@ -1,132 +1,99 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bar } from "react-chartjs-2";
-import {
-  Chart,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
+import { createClient } from "@supabase/supabase-js";
 import logoTecNM from "./assets/Logo_TecNM_Horizontal_Blanco.png";
 import menu from "./assets/menu.png";
 import user from "./assets/ic_user.png";
-import { createClient } from "@supabase/supabase-js";
 
-Chart.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
-
+// Supabase
 const supabase = createClient(
   "https://dqmbtidomzvhprovovyy.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxbWJ0aWRvbXp2aHByb3Zvdnl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwMjgwOTUsImV4cCI6MjA1ODYwNDA5NX0.WU_NJH-XkC7Xi_uaWceZpMpZkZaujeX5L-L1RsbUDsg"
 );
 
-const Dashboard = () => {
+const User = () => {
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+  const userId = localStorage.getItem("userId"); // suponga que guardan ID de analista
+
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isMenuVisible, setIsMenuVisible] = useState(true);
-  const navigate = useNavigate();
   const [isMenuHovered, setIsMenuHovered] = useState(false);
   const [isUserHovered, setIsUserHovered] = useState(false);
-  const [currentDate] = useState(new Date());
-  const [prestamos, setPrestamos] = useState([]);
-  const [chartData, setChartData] = useState(null);
+
+  // Profile data
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [prestamosEnCurso, setPrestamosEnCurso] = useState(0);
-  const [prestamosAtrasados, setPrestamosAtrasados] = useState(0);
-  const token = localStorage.getItem("token");
 
-  const role = localStorage.getItem("userRole");
+  // Password change
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   useEffect(() => {
-    if (!token || !role) navigate("/login");
-    fetchData();
-  }, []);
+    if (!token || !userId) navigate("/login");
+    fetchProfile();
+  }, [navigate, token, userId]);
 
-  const fetchData = async () => {
+  const fetchProfile = async () => {
     setLoading(true);
-    try {
-      // Fetch loans in current month for chart
-      const { data: prestamosData, error: prestamosError } = await supabase
-        .from("prestamos")
-        .select("*")
-        .gte("fecha_prestamo", startOfMonth(currentDate).toISOString())
-        .lte("fecha_prestamo", endOfMonth(currentDate).toISOString());
-      if (prestamosError) throw prestamosError;
-      setPrestamos(prestamosData);
-      processChartData(prestamosData);
-
-      // Fetch count of ongoing loans
-      const { data: cursoCount, error: cursoError } = await supabase.rpc(
-        "get_prestamos_actuales"
-      );
-      if (cursoError) throw cursoError;
-      setPrestamosEnCurso(cursoCount);
-
-      // Fetch count of overdue loans
-      const { data: atrasadosCount, error: atrasadosError } =
-        await supabase.rpc("get_prestamos_atrasados");
-      if (atrasadosError) throw atrasadosError;
-      setPrestamosAtrasados(atrasadosCount);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await supabase
+      .from("analistas")
+      .select("id_analista, nombre, apellidos, usuario")
+      .eq("id_analista", userId)
+      .single();
+    if (error) console.error(error);
+    else setProfile(data);
+    setLoading(false);
   };
 
-  const processChartData = (data) => {
-    const dailyCounts = data.reduce((acc, { fecha_prestamo }) => {
-      const date = format(parseISO(fecha_prestamo), "dd/MM");
-      acc[date] = (acc[date] || 0) + 1;
-      return acc;
-    }, {});
-
-    setChartData({
-      labels: Object.keys(dailyCounts),
-      datasets: [
-        {
-          label: "Préstamos por día",
-          data: Object.values(dailyCounts),
-          backgroundColor: "#1B396A",
-          borderColor: "#1B396A",
-          borderWidth: 1,
-        },
-      ],
+  const handlePasswordUpdate = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert("New passwords do not match.");
+      return;
+    }
+    // Llamar backend RPC para actualizar contraseña
+    const { error } = await supabase.rpc("update_analista_password", {
+      _id_analista: userId,
+      _old_password: oldPassword,
+      _new_password: newPassword,
     });
+    if (error) alert(error.message);
+    else {
+      alert("Password updated successfully.");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
   };
 
   const menuItems = [
     { name: "Dashboard", subItems: null },
     {
       name: "Library",
-      subItems: ["Books", "Loans", ...(role === "admin" ? ["Generate Reports", ] : [])],
+      subItems: ["Books", "Generate Reports", "Loans"],
     },
-    ...(role === "admin"
-      ? [
-          { name: "Personal", subItems: [ "Students"] },
-          { name: "Entry Register", subItems: null },
-        ]
-      : []),
-    { name: "Settings", subItems: [ "User"] },
+    { name: "Personal", subItems: ["Students"] },
+    { name: "Entry Register", subItems: null },
+    { name: "Settings", subItems: ["User"] },
     { name: "Log Out", subItems: null },
   ];
 
-  const supportItems = [
-    { name: "Soporte", subItems: null },
-    { name: "Guía de uso", subItems: null },
-  ];
-
   const handleLogout = () => {
-    if (window.confirm("Do you want to log out?")) {
-      localStorage.removeItem("token");
-      navigate("/", { replace: true });
-    }
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    navigate("/login", { replace: true });
   };
 
+  const toggleDropdown = (name) =>
+    setActiveDropdown(activeDropdown === name ? null : name);
+  const toggleMenu = () => setIsMenuVisible(!isMenuVisible);
   const handleMenuClick = (itemName) => {
     switch (itemName) {
+      case "Dashboard":
+        navigate("/dashboard");
+        break;
       case "Books":
         navigate("/books");
         break;
@@ -139,12 +106,7 @@ const Dashboard = () => {
       case "Students":
         navigate("/students");
         break;
-      case "Entry Register":
-        navigate("/entrance");
-        break;
-      case "User":
-        navigate("/user");
-        break;
+
       case "Log Out":
         handleLogout();
         break;
@@ -152,17 +114,17 @@ const Dashboard = () => {
         break;
     }
   };
-
-  const toggleDropdown = (itemName) =>
-    setActiveDropdown(activeDropdown === itemName ? null : itemName);
-  const toggleMenu = () => setIsMenuVisible(!isMenuVisible);
-
-  if (loading) return <div style={styles.container}>Loading...</div>;
+  const supportItems = [
+    { name: "Soporte", subItems: null },
+    { name: "Guía de uso", subItems: null },
+  ];
   const sidebarStyles = {
     ...styles.sidebar,
     left: isMenuVisible ? 0 : -300,
     transition: "left 0.3s ease",
   };
+  if (loading || !profile) return <div>Cargando perfil...</div>;
+
   return (
     <div style={styles.app}>
       <header style={styles.header}>
@@ -180,7 +142,7 @@ const Dashboard = () => {
           >
             <img src={menu} alt="menu" style={styles.menuH} />
           </button>
-          <img src={logoTecNM} alt="Logo TecNM" style={styles.logo} />
+          <img src={logoTecNM} alt="Logo" style={styles.logo} />
           <div style={styles.username}>LIBRARY SYSTEM</div>
           <button
             style={{
@@ -196,10 +158,11 @@ const Dashboard = () => {
           </button>
         </div>
       </header>
+
       <nav style={sidebarStyles}>
         <div style={styles.menuSection}>
-          {menuItems.map((item, idx) => (
-            <div key={idx} style={styles.menuItem}>
+          {menuItems.map((item, i) => (
+            <div key={i} style={styles.menuItem}>
               <div
                 style={styles.menuMain}
                 onClick={() =>
@@ -208,7 +171,7 @@ const Dashboard = () => {
                     : handleMenuClick(item.name)
                 }
               >
-                {item.name}
+                {item.name}{" "}
                 {item.subItems && (
                   <span
                     style={{
@@ -225,13 +188,13 @@ const Dashboard = () => {
               </div>
               {item.subItems && activeDropdown === item.name && (
                 <div style={styles.dropdown}>
-                  {item.subItems.map((sub, i) => (
+                  {item.subItems.map((s, j) => (
                     <div
-                      key={i}
+                      key={j}
                       style={styles.submenuItem}
-                      onClick={() => handleMenuClick(sub)}
+                      onClick={() => handleMenuClick(s)}
                     >
-                      {sub}
+                      {s}
                     </div>
                   ))}
                 </div>
@@ -240,51 +203,70 @@ const Dashboard = () => {
           ))}
         </div>
         <div style={styles.supportSection}>
-          {supportItems.map((it, i) => (
+          {supportItems.map((s, i) => (
             <div key={i} style={styles.supportItem}>
-              {it.name}
+              {s.name}
             </div>
           ))}
         </div>
       </nav>
-      <div style={{
-    ...styles.content,
-    marginLeft: isMenuVisible ? "25%" : "5%",
-    transition: "margin-left 0.3s ease",
-  }}>
-        <div style={{ display: "flex", gap: "2rem" }}>
-          <div style={{ ...styles.chartContainer, flex: 2 }}>
-            <Bar
-              data={chartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { position: "top" },
-                  title: {
-                    display: true,
-                    text: `Loans - ${format(currentDate, "MMMM yyyy", {
-                      locale: es,
-                    })}`,
-                  },
-                },
-              }}
+
+      <div
+        style={{
+          ...styles.content,
+          marginLeft: isMenuVisible ? "25%" : "5%", // Ajusta los valores según diseño
+          transition: "margin-left 0.3s ease",
+          display: "flex",
+flexDirection: "column",
+alignItems: "center",
+        }}
+      >
+        <div style={{...styles.statsContainer, flex: 1}}>
+        <h1>Perfil de Analista</h1>
+        <div style={styles.profileCard}>
+          <p>
+            <strong>ID:</strong> {profile.id_analista}
+          </p>
+          <p>
+            <strong>Nombre:</strong> {profile.nombre} {profile.apellidos}
+          </p>
+          <p>
+            <strong>Usuario:</strong> {profile.usuario}
+          </p>
+        </div>
+
+        <div style={styles.card}>
+          <h2>Cambiar Contraseña</h2>
+          <form onSubmit={handlePasswordUpdate} style={styles.form}>
+            <input
+              type="password"
+              placeholder="Contraseña actual"
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              required
+              style={styles.input}
             />
-          </div>
-          <div style={{ ...styles.statsContainer, flex: 1 }}>
-            <div style={styles.statCard}>
-              <h3>Ongoing Loans</h3>
-              <h1 style={{ color: "#1B396A", fontSize: "2.5rem" }}>
-                {prestamosEnCurso}
-              </h1>
-            </div>
-            <div style={styles.statCard}>
-              <h3>Overdue Loans</h3>
-              <h1 style={{ color: "#1B396A", fontSize: "2.5rem" }}>
-                {prestamosAtrasados}
-              </h1>
-            </div>
-          </div>
+            <input
+              type="password"
+              placeholder="Nueva contraseña"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              style={styles.input}
+            />
+            <input
+              type="password"
+              placeholder="Confirmar nueva contraseña"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              style={styles.input}
+            />
+            <button type="submit" style={styles.saveButton}>
+              Actualizar
+            </button>
+          </form>
+        </div>
         </div>
       </div>
     </div>
@@ -293,21 +275,17 @@ const Dashboard = () => {
 
 const styles = {
   app: { display: "flex", minHeight: "100vh", backgroundColor: "#f0f2f5" },
+
   header: {
     position: "fixed",
     width: "100%",
     background: "#1B396A",
-    color: "white",
+    color: "#fff",
     padding: "1rem 2rem",
     boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
     zIndex: 100,
   },
-  leftHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "30px",
-    width: "100%",
-  },
+  leftHeader: { display: "flex", alignItems: "center", gap: "30px" },
   button: {
     width: "55px",
     height: "55px",
@@ -315,7 +293,6 @@ const styles = {
     border: "none",
     cursor: "pointer",
     padding: "5px",
-    flexShrink: 0,
     borderRadius: "50%",
     transition: "background-color 0.3s ease",
   },
@@ -325,22 +302,16 @@ const styles = {
     cursor: "pointer",
     padding: "0",
     marginRight: "10px",
-    flexShrink: 0,
     transition: "background-color 0.3s ease",
   },
   menuH: { width: "20px", height: "20px", filter: "brightness(0) invert(1)" },
   userimg: { width: "40px", height: "40px", filter: "brightness(0) invert(1)" },
-  logo: { width: "auto", height: "70px", maxWidth: "200px", flexShrink: 0 },
+  logo: { width: "auto", height: "70px", maxWidth: "200px" },
   username: {
     fontSize: "1.4rem",
     fontWeight: "bold",
     opacity: 0.9,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    maxWidth: "300px",
-    flexShrink: 1,
-    marginLeft: "63%",
+    marginLeft: "auto",
   },
   sidebar: {
     width: 250,
@@ -368,7 +339,7 @@ const styles = {
     alignItems: "center",
     transition: "background 0.3s",
   },
-  arrow: { fontSize: "0.8rem", transition: "transform 0.3s", color: "#666" },
+  arrow: { fontSize: "0.8rem", color: "#666" },
   dropdown: {
     marginLeft: "1rem",
     borderLeft: "2px solid #e0e0e0",
@@ -384,22 +355,48 @@ const styles = {
   supportSection: { borderTop: "1px solid #eee", paddingTop: "1rem" },
   supportItem: { padding: "0.8rem", color: "#666", cursor: "pointer" },
   content: {
-    marginLeft: "600px",
+    marginLeft: "25%",
     paddingTop: "7%",
+    minHeight: "100vh",
     backgroundColor: "#f0f2f5",
-  },
-  statsContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "2rem",
-    paddingLeft: 0,
-  },
-  statCard: {
-    backgroundColor: "#fff",
-    borderRadius: "8px",
-    padding: "1.5rem",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+    padding: "2rem",
     textAlign: "center",
+  },
+  profileCard: {
+    background: "#fff",
+    padding: "1.5rem",
+    borderRadius: 8,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+    marginBottom: "2rem",
+    width: "100%",
+    maxWidth: "1000px",
+    margin: "0 auto 2rem",
+    boxSizing: "border-box",
+  },
+  card: {
+    background: "#fff",
+    padding: "1.5rem",
+    borderRadius: 8,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+    width: "100%",
+    maxWidth: "1000px",
+    margin: "0 auto",
+    boxSizing: "border-box",
+  },
+  form: { display: "flex", flexDirection: "column", gap: "2rem" , width:"60rem"},
+  input: {
+    padding: "0.75rem",
+    fontSize: "1rem",
+    borderRadius: 4,
+    border: "1px solid #ccc",
+  },
+  saveButton: {
+    padding: "0.75rem",
+    background: "#1B396A",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
   },
   chartContainer: {
     backgroundColor: "#fff",
@@ -407,9 +404,9 @@ const styles = {
     borderRadius: "8px",
     padding: "1.5rem",
     boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-    height: "400px",
+    height: "100rem",
     marginBottom: "2rem",
   },
 };
 
-export default Dashboard;
+export default User;

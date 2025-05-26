@@ -25,11 +25,11 @@ const Students = () => {
     { name: "Dashboard", subItems: null },
     {
       name: "Library",
-      subItems: ["Books", "Generate Reports", "Loans", "Arrears"],
+      subItems: ["Books", "Generate Reports", "Loans"],
     },
-    { name: "Personal", subItems: ["Teachers", "Students"] },
+    { name: "Personal", subItems: ["Students"] },
     { name: "Entry Register", subItems: null },
-    { name: "Settings", subItems: ["Dark Mode", "User"] },
+    { name: "Settings", subItems: ["User"] },
     { name: "Log Out", subItems: null },
   ];
   const supportItems = [
@@ -70,11 +70,18 @@ const Students = () => {
     fetchAlumnos();
   }, []);
 
-  // Inserta nuevo alumno con ID proporcionado
+  // Inserta nuevo alumno con ID y genero proporcionados
   const handleAddStudent = async (e) => {
     e.preventDefault();
-    const { id_alumno, nombre, apellidos, id_carrera, estatus, password } =
-      newStudent;
+    const {
+      id_alumno,
+      nombre,
+      apellidos,
+      id_carrera,
+      estatus,
+      password,
+      genero,
+    } = newStudent;
     const { error } = await supabase.rpc("insertar_alumno", {
       _id_alumno: parseInt(id_alumno, 10),
       _nombre: nombre,
@@ -82,6 +89,7 @@ const Students = () => {
       _id_carrera: parseInt(id_carrera, 10),
       _estatus: estatus,
       _password: password,
+      _genero: genero,
     });
     if (error) {
       console.error("Error inserting student:", error);
@@ -96,6 +104,7 @@ const Students = () => {
         id_carrera: "",
         estatus: "activo",
         password: "",
+        genero: "H",
       });
       fetchAlumnos();
     }
@@ -128,13 +137,15 @@ const Students = () => {
       case "Entry Register":
         navigate("/entrance");
         break;
+        case "User":
+          navigate("/user");
+          break;
       case "Log Out":
         handleLogout();
         break;
       default:
         break;
     }
-    
   };
   const sidebarStyles = {
     ...styles.sidebar,
@@ -221,18 +232,25 @@ const Students = () => {
             </div>
           ))}
         </div>
-        
       </nav>
 
       {/* CONTENIDO */}
-      <div style={styles.content}>
+      <div
+        style={{
+          ...styles.content,
+          marginLeft: isMenuVisible ? "25%" : "5%", // Ajusta según diseño
+          transition: "margin-left 0.3s ease",
+        }}
+      >
         {/* Botones */}
-        
-        <div style={{
+
+        <div
+          style={{
             marginTop: "5rem",
             display: "flex",
             justifyContent: "center",
-          }}>
+          }}
+        >
           <button style={styles.actionButton} onClick={fetchAlumnos}>
             Update
           </button>
@@ -281,7 +299,7 @@ const Students = () => {
         {showModal && (
           <div style={styles.modalOverlay}>
             <div style={styles.modal}>
-              <h2 style={{ marginBottom: "1rem" }}>Add New Student</h2>
+              <h2>Add New Student</h2>
               <form onSubmit={handleAddStudent} style={styles.form}>
                 <input
                   type="number"
@@ -335,6 +353,17 @@ const Students = () => {
                       {opt}
                     </option>
                   ))}
+                </select>
+                <select
+                  value={newStudent.genero}
+                  onChange={(e) =>
+                    setNewStudent({ ...newStudent, genero: e.target.value })
+                  }
+                  style={styles.modalInput}
+                  required
+                >
+                  <option value="H">H</option>
+                  <option value="M">M</option>
                 </select>
                 <input
                   type="password"

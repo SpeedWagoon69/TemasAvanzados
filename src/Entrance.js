@@ -18,8 +18,8 @@ const Entrance = () => {
   const [isMenuHovered, setIsMenuHovered] = useState(false);
   const [isUserHovered, setIsUserHovered] = useState(false);
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) navigate("/login", { replace: true });
+    const token = localStorage.getItem('token');
+        if (!token) navigate("/login", { replace: true });
   }, [navigate]);
   // Estado para entradas
   const [entradas, setEntradas] = useState([]);
@@ -33,6 +33,9 @@ const Entrance = () => {
   });
   const [alumnos, setAlumnos] = useState([]);
   const [carreras, setCarreras] = useState([]);
+  // Tipo de búsqueda
+  const [query, setQuery] = useState("");
+  const [filteredAlumnos, setFilteredAlumnos] = useState([]);
   useEffect(() => {
     const fetchCarreras = async () => {
       const { data, error } = await supabase
@@ -52,11 +55,11 @@ const Entrance = () => {
     { name: "Dashboard", subItems: null },
     {
       name: "Library",
-      subItems: ["Books", "Generate Reports", "Loans", "Arrears"],
+      subItems: ["Books", "Generate Reports", "Loans"],
     },
-    { name: "Personal", subItems: ["Teachers", "Students"] },
+    { name: "Personal", subItems: ["Students"] },
     { name: "Entry Register", subItems: null },
-    { name: "Settings", subItems: ["Dark Mode", "User"] },
+    { name: "Settings", subItems: [ "User"] },
     { name: "Log Out", subItems: null },
   ];
 
@@ -84,6 +87,17 @@ const Entrance = () => {
     if (error) console.error("Error cargando alumnos:", error);
     else setAlumnos(data);
   };
+  useEffect(() => {
+    if (query) {
+      const lower = query.toLowerCase();
+      setFilteredAlumnos(
+        alumnos.filter(a =>
+          String(a.id_alumno).startsWith(lower) ||
+          (`${a.nombre} ${a.apellidos}`).toLowerCase().includes(lower)
+        )
+      );
+    } else setFilteredAlumnos([]);
+  }, [query, alumnos]);
   const toggleDropdown = (itemName) => {
     setActiveDropdown(activeDropdown === itemName ? null : itemName);
   };
@@ -114,6 +128,9 @@ const Entrance = () => {
       case "Students":
         navigate("/students");
         break;
+        case "User":
+          navigate("/user");
+          break;
       case "Log Out":
         handleLogout();
         break;
@@ -122,19 +139,15 @@ const Entrance = () => {
     }
   };
   // Maneja cambio de select alumno
-  const handleSelectAlumno = (e) => {
-    const id = e.target.value;
-    const alumno = alumnos.find((a) => String(a.id_alumno) === id);
-    if (alumno) {
-      setFormData({
-        id_alumno: String(alumno.id_alumno),
-        nombre: `${alumno.nombre} ${alumno.apellidos}`,
-        carrera: String(alumno.id_carrera),
-        asunto: formData.asunto,
-      });
-    } else {
-      setFormData({ id_alumno: "", nombre: "", carrera: "", asunto: "" });
-    }
+  const handleSelectAlumno = (alumno) => {
+    setFormData({
+      id_alumno: String(alumno.id_alumno),
+      nombre: `${alumno.nombre} ${alumno.apellidos}`,
+      carrera: String(alumno.id_carrera),
+      asunto: formData.asunto,
+    });
+    setQuery(String(alumno.id_alumno));
+    setFilteredAlumnos([]);
   };
   const sidebarStyles = {
     ...styles.sidebar,
@@ -143,28 +156,28 @@ const Entrance = () => {
   };
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'id_alumno') setQuery(value);
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
+  const validAlumno = alumnos.some(a => String(a.id_alumno) === formData.id_alumno);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validAlumno) return;
     const { id_alumno, nombre, carrera, asunto } = formData;
-
     const { error } = await supabase.rpc("insertar_entrada", {
       _id_alumno: parseInt(id_alumno),
       _nombre: nombre,
-      _id_carrera: parseInt(carrera), // CORREGIDO
+      _id_carrera: parseInt(carrera),
       _asunto: asunto,
     });
-
-    if (error) {
-      console.error("Error inserting entry:", error);
-      alert(`Error: ${error.message}`);
-    } else {
+    if (error) alert(`Error: ${error.message}`);
+    else {
       alert("Entry registered successfully.");
       setShowModal(false);
       setFormData({ id_alumno: "", nombre: "", carrera: "", asunto: "" });
-      fetchEntradas(); // Recargar la tabla
+      setQuery("");
+      fetchEntradas();
     }
   };
 
@@ -257,7 +270,11 @@ const Entrance = () => {
         </div>
       </nav>
 
-      <div style={styles.content}>
+      <div style={{
+    ...styles.content,
+    marginLeft: isMenuVisible ? "25%" : "5%",  // Ajusta los valores según tu diseño
+    transition: "margin-left 0.3s ease",
+  }}>
         <div style={styles.buttonRow}>
           <div
             style={{
@@ -281,20 +298,28 @@ const Entrance = () => {
               <div style={styles.modal}>
                 <h2>Register New Entry</h2>
                 <form onSubmit={handleSubmit} style={styles.form}>
-                  <select
-                    name="id_alumno"
-                    value={formData.id_alumno}
-                    onChange={handleSelectAlumno}
-                    style={styles.modalInput}
-                    required
-                  >
-                    <option value="">— Select Student —</option>
-                    {alumnos.map((a) => (
-                      <option key={a.id_alumno} value={a.id_alumno}>
-                        {a.id_alumno}
-                      </option>
+                   {/* input con búsqueda */}
+                <input
+                  name="id_alumno"
+                  placeholder="Search Student ID or Name"
+                  value={query}
+                  onChange={handleInputChange}
+                  style={styles.modalInput}
+                  required
+                />
+                {filteredAlumnos.length > 0 && (
+                  <ul style={styles.suggestionsList}>
+                    {filteredAlumnos.map(a => (
+                      <li
+                        key={a.id_alumno}
+                        style={styles.suggestionItem}
+                        onClick={() => handleSelectAlumno(a)}
+                      >
+                        {a.id_alumno} - {a.nombre} {a.apellidos}
+                      </li>
                     ))}
-                  </select>
+                  </ul>
+                )}
                   <input
                     type="text"
                     name="nombre"

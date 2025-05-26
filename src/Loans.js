@@ -10,14 +10,26 @@ const supabase = createClient(
   "https://dqmbtidomzvhprovovyy.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxbWJ0aWRvbXp2aHByb3Zvdnl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMwMjgwOTUsImV4cCI6MjA1ODYwNDA5NX0.WU_NJH-XkC7Xi_uaWceZpMpZkZaujeX5L-L1RsbUDsg"
 );
-
+const countBusinessDays = (startDate, endDate) => {
+  let count = 0;
+  const current = new Date(startDate);
+  const end = new Date(endDate);
+  while (current <= end) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+};
 const Loans = () => {
   const navigate = useNavigate();
   // Control de autenticación: redirige a login si no hay token
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("userRole");
+  // Control de autenticación: redirige a login si no hay token
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) navigate("/login", { replace: true });
-  }, [navigate]);
+    if (!token || !role) navigate("/login", { replace: true });
+  }, [navigate, token, role]);
 
   // Sidebar state
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -30,11 +42,19 @@ const Loans = () => {
     { name: "Dashboard", subItems: null },
     {
       name: "Library",
-      subItems: ["Books", "Generate Reports", "Loans", "Arrears"],
+      subItems: [
+        "Books",
+        "Loans",
+        ...(role === "admin" ? ["Generate Reports"] : []),
+      ],
     },
-    { name: "Personal", subItems: ["Teachers", "Students"] },
-    { name: "Entry Register", subItems: null },
-    { name: "Settings", subItems: ["Dark Mode", "User"] },
+    ...(role === "admin"
+      ? [
+          { name: "Personal", subItems: ["Students"] },
+          { name: "Entry Register", subItems: null },
+        ]
+      : []),
+    { name: "Settings", subItems: ["User"] },
     { name: "Log Out", subItems: null },
   ];
   const supportItems = [
@@ -110,6 +130,9 @@ const Loans = () => {
       case "Entry Register":
         navigate("/entrance");
         break;
+        case "User":
+          navigate("/user");
+          break;
       case "Log Out":
         handleLogout();
         break;
@@ -117,7 +140,15 @@ const Loans = () => {
         break;
     }
   };
-
+  const validateDuration = () => {
+    const { fecha_prestamo, fecha_devolucion_prevista } = formData;
+    if (!fecha_prestamo || !fecha_devolucion_prevista) return false;
+    const bd = countBusinessDays(
+      new Date(fecha_prestamo),
+      new Date(fecha_devolucion_prevista)
+    );
+    return bd === 8;
+  };
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -125,7 +156,10 @@ const Loans = () => {
 
   const handleAdd = async (e) => {
     e.preventDefault();
-  
+    if (!validateDuration()) {
+      alert("La duración debe ser exactamente 8 días hábiles.");
+      return;
+    }
     const { error } = await supabase.rpc("insert_prestamo", {
       _id_libro: parseInt(formData.id_libro),
       _id_analista: parseInt(formData.id_analista),
@@ -134,18 +168,19 @@ const Loans = () => {
       _fecha_prestamo: formData.fecha_prestamo,
       _fecha_devolucion_prevista: formData.fecha_devolucion_prevista,
     });
-  
-    if (error) {
-      alert(error.message);
-    } else {
+    if (error) alert(error.message);
+    else {
       setShowAdd(false);
       fetchLoans();
     }
   };
-  
 
   const handleEdit = async (e) => {
     e.preventDefault();
+    if (!validateDuration()) {
+      alert("La duración debe ser exactamente 8 días hábiles.");
+      return;
+    }
     const { error } = await supabase.rpc("update_prestamo_dates", {
       _id_prestamo: editId,
       _fecha_prestamo: formData.fecha_prestamo,
@@ -187,7 +222,9 @@ const Loans = () => {
           <button
             style={{
               ...styles.button,
-              backgroundColor: isMenuHovered ? "rgba(255,255,255,0.1)" : "transparent",
+              backgroundColor: isMenuHovered
+                ? "rgba(255,255,255,0.1)"
+                : "transparent",
             }}
             onMouseEnter={() => setIsMenuHovered(true)}
             onMouseLeave={() => setIsMenuHovered(false)}
@@ -200,7 +237,9 @@ const Loans = () => {
           <button
             style={{
               ...styles.buttonUsr,
-              backgroundColor: isUserHovered ? "rgba(255,255,255,0.1)" : "transparent",
+              backgroundColor: isUserHovered
+                ? "rgba(255,255,255,0.1)"
+                : "transparent",
             }}
             onMouseEnter={() => setIsUserHovered(true)}
             onMouseLeave={() => setIsUserHovered(false)}
@@ -218,7 +257,9 @@ const Loans = () => {
               <div
                 style={styles.menuMain}
                 onClick={() =>
-                  item.subItems ? toggleDropdown(item.name) : handleMenuClick(item.name)
+                  item.subItems
+                    ? toggleDropdown(item.name)
+                    : handleMenuClick(item.name)
                 }
               >
                 {item.name}{" "}
@@ -226,7 +267,10 @@ const Loans = () => {
                   <span
                     style={{
                       ...styles.arrow,
-                      transform: activeDropdown === item.name ? "rotate(180deg)" : "none",
+                      transform:
+                        activeDropdown === item.name
+                          ? "rotate(180deg)"
+                          : "none",
                     }}
                   >
                     ▼
@@ -289,13 +333,18 @@ const Loans = () => {
             </thead>
             <tbody>
               {loans.map((l) => (
-                <tr key={l.id_prestamo} style={styles.evenOdd[l.id_prestamo % 2]}>
+                <tr
+                  key={l.id_prestamo}
+                  style={styles.evenOdd[l.id_prestamo % 2]}
+                >
                   <td style={styles.td}>{l.id_prestamo}</td>
                   <td style={styles.td}>{l.libro_titulo}</td>
                   <td style={styles.td}>{l.prestatario}</td>
                   <td style={styles.td}>{l.fecha_prestamo}</td>
                   <td style={styles.td}>{l.fecha_devolucion_prevista}</td>
-                  <td style={styles.td}>{l.fecha_devolucion_real || "Sin devolver"}</td>
+                  <td style={styles.td}>
+                    {l.fecha_devolucion_real || "Sin devolver"}
+                  </td>
                   <td style={styles.td}>
                     <button
                       style={styles.smallButton}
@@ -303,7 +352,8 @@ const Loans = () => {
                         setEditId(l.id_prestamo);
                         setFormData({
                           fecha_prestamo: l.fecha_prestamo,
-                          fecha_devolucion_prevista: l.fecha_devolucion_prevista,
+                          fecha_devolucion_prevista:
+                            l.fecha_devolucion_prevista,
                           fecha_devolucion_real: l.fecha_devolucion_real || "",
                           returnMode: l.fecha_devolucion_real ? "date" : "none",
                         });
@@ -430,9 +480,21 @@ const Loans = () => {
                   />
                 </label>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                  }}
+                >
                   <span>Actual Return:</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1rem",
+                    }}
+                  >
                     <select
                       name="returnMode"
                       value={formData.returnMode}
@@ -441,7 +503,8 @@ const Loans = () => {
                         setFormData((prev) => ({
                           ...prev,
                           returnMode: mode,
-                          fecha_devolucion_real: mode === "date" ? prev.fecha_devolucion_real : "",
+                          fecha_devolucion_real:
+                            mode === "date" ? prev.fecha_devolucion_real : "",
                         }));
                       }}
                       style={{ ...styles.modalInput, maxWidth: "200px" }}
@@ -482,7 +545,6 @@ const Loans = () => {
     </div>
   );
 };
-
 
 // Styles
 const styles = {
@@ -626,8 +688,10 @@ const styles = {
   },
   modalOverlay: {
     position: "fixed",
-    top: 0, left: 0,
-    width: "100vw", height: "100vh",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
     backgroundColor: "rgba(0,0,0,0.6)",
     display: "flex",
     justifyContent: "center",

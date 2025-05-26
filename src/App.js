@@ -7,6 +7,7 @@ import Books from "./Books";
 import Loans from "./Loans";
 import Students from "./Students";
 import Reports from "./Reports";
+import Users from "./User";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="/students" element={<Students />} />
         <Route path="/entrance" element={<Entrance />} />
         <Route path="/reports" element={<Reports/>}/>
+        <Route path="/user" element={<Users/>}/>
       </Routes>
     </Router>
   );

@@ -27,12 +27,30 @@ const Books = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [filteredBook, setFilteredBook] = useState(null);
 
+  const token = localStorage.getItem("token");
+  //linea del rol afecta al useEffect
+  const role = localStorage.getItem("userRole");
+  useEffect(() => {
+    if (!token || !role) navigate("/login", { replace: true });
+  }, [navigate, token, role]);
+  //cambios del menuItems
   const menuItems = [
     { name: "Dashboard", subItems: null },
-    { name: "Library", subItems: ["Books", "Generate Reports", "Loans", "Arrears"] },
-    { name: "Personal", subItems: ["Teachers", "Students"] },
-    { name: "Entry Register", subItems: null },
-    { name: "Settings", subItems: ["Dark Mode", "User"] },
+    {
+      name: "Library",
+      subItems: [
+        "Books",
+        "Loans",
+        ...(role === "admin" ? ["Generate Reports"] : []),
+      ],
+    },
+    ...(role === "admin"
+      ? [
+          { name: "Personal", subItems: ["Students"] },
+          { name: "Entry Register", subItems: null },
+        ]
+      : []),
+    { name: "Settings", subItems: ["User"] },
     { name: "Log Out", subItems: null },
   ];
   const supportItems = [
@@ -120,13 +138,23 @@ const Books = () => {
   };
   const handleMenuClick = (name) => {
     switch (name) {
-      case "Dashboard": return navigate("/dashboard");
-      case "Loans": return navigate("/loans");
-      case "Generate Reports": return navigate("/reports");
-      case "Students": return navigate("/students");
-      case "Entry Register": return navigate("/entrance");
-      case "Log Out": return handleLogout();
-      default: return;
+      case "Dashboard":
+        return navigate("/dashboard");
+      case "Loans":
+        return navigate("/loans");
+      case "Generate Reports":
+        return navigate("/reports");
+      case "Students":
+        return navigate("/students");
+      case "Entry Register":
+        return navigate("/entrance");
+        case "User":
+          navigate("/user");
+          break;
+      case "Log Out":
+        return handleLogout();
+      default:
+        return;
     }
   };
 
@@ -144,7 +172,9 @@ const Books = () => {
           <button
             style={{
               ...styles.button,
-              backgroundColor: isMenuHovered ? "rgba(255,255,255,0.1)" : "transparent",
+              backgroundColor: isMenuHovered
+                ? "rgba(255,255,255,0.1)"
+                : "transparent",
             }}
             onMouseEnter={() => setIsMenuHovered(true)}
             onMouseLeave={() => setIsMenuHovered(false)}
@@ -157,7 +187,9 @@ const Books = () => {
           <button
             style={{
               ...styles.buttonUsr,
-              backgroundColor: isUserHovered ? "rgba(255,255,255,0.1)" : "transparent",
+              backgroundColor: isUserHovered
+                ? "rgba(255,255,255,0.1)"
+                : "transparent",
             }}
             onMouseEnter={() => setIsUserHovered(true)}
             onMouseLeave={() => setIsUserHovered(false)}
@@ -175,7 +207,9 @@ const Books = () => {
               <div
                 style={styles.menuMain}
                 onClick={() =>
-                  item.subItems ? toggleDropdown(item.name) : handleMenuClick(item.name)
+                  item.subItems
+                    ? toggleDropdown(item.name)
+                    : handleMenuClick(item.name)
                 }
               >
                 {item.name}
@@ -183,7 +217,10 @@ const Books = () => {
                   <span
                     style={{
                       ...styles.arrow,
-                      transform: activeDropdown === item.name ? "rotate(180deg)" : "none",
+                      transform:
+                        activeDropdown === item.name
+                          ? "rotate(180deg)"
+                          : "none",
                     }}
                   >
                     ▼
@@ -208,26 +245,44 @@ const Books = () => {
         </div>
         <div style={styles.supportSection}>
           {supportItems.map((it, i) => (
-            <div key={i} style={styles.supportItem}>{it.name}</div>
+            <div key={i} style={styles.supportItem}>
+              {it.name}
+            </div>
           ))}
         </div>
       </nav>
 
       {/* Content */}
-      <div style={styles.content}>
+      <div
+        style={{
+          ...styles.content,
+          marginLeft: isMenuVisible ? "25%" : "5%", // Ajusta los valores según diseño
+          transition: "margin-left 0.3s ease",
+        }}
+      >
         <h2>Books List</h2>
-        <div style={{ marginBottom: "2rem", position: "relative", display: "flex", gap: "0.5rem" , height:"1%"}}>
+        <div
+          style={{
+            marginBottom: "2rem",
+            position: "relative",
+            display: "flex",
+            gap: "0.5rem",
+            height: "1%",
+          }}
+        >
           <input
             type="text"
             placeholder="Search books..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             style={{ ...styles.modalInput, flex: 1 }}
           />
-          <button onClick={handleClear} style={styles.cancelButton}>Clear</button>
+          <button onClick={handleClear} style={styles.cancelButton}>
+            Clear
+          </button>
           {suggestions.length > 0 && (
             <ul style={styles.suggestionList}>
-              {suggestions.map(s => (
+              {suggestions.map((s) => (
                 <li
                   key={s.id_libro}
                   onClick={() => handleSelectSuggestion(s)}
@@ -245,14 +300,21 @@ const Books = () => {
           <table style={styles.table}>
             <thead>
               <tr>
-                {["ID","Unit","Title","Author","Classification"].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
-                ))}
+                {["ID", "Unit", "Title", "Author", "Classification"].map(
+                  (h) => (
+                    <th key={h} style={styles.th}>
+                      {h}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody>
-              {(filteredBook ? [filteredBook] : books).map((b,i) => (
-                <tr key={b.id_libro} style={i%2===0?styles.evenRow:styles.oddRow}>
+              {(filteredBook ? [filteredBook] : books).map((b, i) => (
+                <tr
+                  key={b.id_libro}
+                  style={i % 2 === 0 ? styles.evenRow : styles.oddRow}
+                >
                   <td style={styles.td}>{b.id_libro}</td>
                   <td style={styles.td}>{b.unidad}</td>
                   <td style={styles.td}>{b.titulo}</td>
@@ -265,14 +327,21 @@ const Books = () => {
           {!filteredBook && (
             <div style={styles.pagination}>
               <button
-                onClick={() => goToPage(currentPage-1)}
-                disabled={currentPage===1}
-                style={ currentPage===1 ? styles.pageButtonDisabled : styles.pageButton }
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                style={
+                  currentPage === 1
+                    ? styles.pageButtonDisabled
+                    : styles.pageButton
+                }
               >
                 Back
               </button>
               <span>Page {currentPage}</span>
-              <button onClick={() => goToPage(currentPage+1)} style={styles.pageButton}>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                style={styles.pageButton}
+              >
                 Next
               </button>
             </div>
